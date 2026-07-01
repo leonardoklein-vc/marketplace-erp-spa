@@ -1,0 +1,1372 @@
+<script>
+  // ==========================================
+  // VARIÁVEIS GLOBAIS DE ESTADO
+  // ==========================================
+  var dtInstancias = {}; 
+  var configSistema = {}; 
+  var idEdicaoAtual = null;
+  var htmlOptionsEstoque = '<option value="NENHUM">Nenhuma Peça (Apenas Serviço)</option>';
+  var dadosCatalogoDisponivel = []; // <--- ADICIONE ESTA LINHA AQUI
+
+  // ==========================================
+  // NAVEGAÇÃO SPA E ROTEAMENTO
+  // ==========================================
+  function mudarAba(idAba) {
+    $('.section-view').removeClass('active');
+    $('.nav-item').removeClass('active');
+    
+    $('#' + idAba).addClass('active');
+    $(`.nav-item[data-target="${idAba}"]`).addClass('active');
+    
+    if(idAba === 'modulo-dashboard') {
+      carregarDashboard();
+    }
+    else if(idAba === 'modulo-clientes') {
+      var colsCli = [{title:"ID"},{title:"Nome"},{title:"Telefone"},{title:"Canal"},{title:"Obs"},{title:"Ações", orderable:false}];
+      gerarTabelaPadrao('Clientes', '#tabelaClientes', colsCli, 'getTabelaClientes');
+    }
+    else if(idAba === 'modulo-config') {
+      carregarConfiguracoes();
+    }
+    else if(idAba === 'modulo-compras') {
+      var colsC = [{title:"ID"},{title:"Data"},{title:"Modelo/Lote"},{title:"Qtd"},{title:"Custo Prod"},{title:"Frete"},{title:"Status"},{title:"Obs"},{title:"Ações", orderable:false}];
+      gerarTabelaPadrao('Compras', '#tabelaCompras', colsC, 'getTabelaCompras');
+    }
+    else if(idAba === 'modulo-vendas') {
+      var colsV = [{title:"ID"},{title:"Peças Utilizadas"},{title:"Data"},{title:"Qtd"},{title:"Val Bruto"},{title:"Frete +"},{title:"Frete -"},{title:"Canal"},{title:"Serviço/Peça"},{title:"Obs"},{title:"Tipo"},{title:"Cliente"},{title:"Ações", orderable:false}];
+      gerarTabelaPadrao('Vendas', '#tabelaVendas', colsV, 'getTabelaVendas');
+      carregarIdsEstoque();
+    }
+    else if(idAba === 'modulo-catalogo') {
+      // Definição das 9 colunas do Catálogo
+      var colsCat = [
+        {title:"ID"},
+        {title:"Data"},
+        {title:"Item"},
+        {title:"Tipo"},
+        {title:"Valor"},
+        {title:"Origem"},
+        {title:"Canais"},
+        {title:"Status"},
+        {title:"Obs"},
+        {title:"Ações", orderable:false}
+      ];
+      gerarTabelaPadrao('Catalogo', '#tabelaCatalogo', colsCat, 'getTabelaCatalogo');
+      carregarIdsEstoque();
+    }
+    else if(idAba === 'modulo-financeiro') {
+      gerarTabelaFinanceiro();
+    }
+  }
+
+  // ==========================================
+  // DASHBOARD FINANCEIRO
+  // ==========================================
+  function carregarDashboard() {
+    var filtro = $('#filtro-global-dash').val() || 'Todas';
+    
+    // Mostra estado de carregamento
+    $('#dash-saldos-contas').html('<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Sincronizando...</div>');
+
+    google.script.run
+      .withSuccessHandler(function(d) {
+        $('#dash-custos').text('R$ ' + d.custos);
+        $('#dash-receitas').text('R$ ' + d.receitas);
+        $('#dash-lucro').text('R$ ' + d.lucro);
+        $('#dash-margem').text(d.margem);
+        
+        var htmlSaldos = '';
+        var totalSaldos = 0;
+        
+        // Recupera da memória do navegador quais contas estão ocultas
+        var contasOcultas = JSON.parse(localStorage.getItem('dashContasOcultas') || '[]');
+
+        if (d.saldos && d.saldos.length > 0) {
+          d.saldos.forEach(function(s) { 
+            var isChecked = !contasOcultas.includes(s.nome);
+            var valNum = parseFloat(s.saldo.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
+            
+            // Só soma no total geral se a conta estiver com o check marcado
+            if (isChecked && !isNaN(valNum)) {
+                totalSaldos += valNum;
+            }
+
+            htmlSaldos += `
+            <div class="account-item d-flex justify-content-between align-items-center py-2 border-bottom">
+              <div>
+                <span class="color-dot" style="background:${s.cor}"></span>
+                <span class="fw-bold text-secondary" style="font-size: 0.95rem;">${s.nome}</span>
+              </div>
+              <div class="d-flex align-items-center">
+                <span class="fw-bold text-dark me-3 val-conta-dash">${s.saldo}</span>
+                <div class="form-check form-switch m-0 p-0 d-flex align-items-center">
+                  <input class="form-check-input m-0 chk-conta-dash" type="checkbox" style="cursor:pointer;" data-nome="${s.nome}" ${isChecked ? 'checked' : ''} title="Somar no Total">
+                </div>
+              </div>
+            </div>`; 
+          });
+        } else {
+          htmlSaldos = '<p class="text-muted small text-center my-4">Nenhuma conta com saldo.</p>';
+        }
+        
+        var totalStr = totalSaldos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        
+        $('#dash-saldos-contas').html(htmlSaldos);
+        $('#dash-total-contas').text(totalStr);
+      })
+      .obterResumoFinanceiro(filtro);
+  }
+
+  // ==========================================
+  // CARREGAMENTO DE CONFIGURAÇÕES E LISTAS
+  // ==========================================
+  function preencherSelect(seletor, array) { 
+    var opts = ''; 
+    array.forEach(function(i) { 
+        opts += `<option value="${i}">${i}</option>`; 
+    }); 
+    $(seletor).html(opts); 
+  }
+
+  function preencherFiltro(seletor, array, textoTodos = 'Todos') { 
+    var opts = `<option value="">${textoTodos}</option>`; 
+    array.forEach(function(i) { 
+        opts += `<option value="${i}">${i}</option>`; 
+    }); 
+    $(seletor).html(opts); 
+  }
+
+  function carregarConfiguracoes() {
+    google.script.run.withSuccessHandler(function(cfg) {
+      configSistema = cfg;
+      
+      // 1. Preenche os selects dos MODAIS
+      preencherSelect('#v-canal, #cli-canal', cfg.canais);
+      preencherSelect('#a-plataforma', cfg.plataformas);
+      preencherSelect('#f-cat', cfg.catDespesas); 
+      
+      // 2. Preenche os selects dos FILTROS NAS TABELAS
+      preencherFiltro('#filtro-cli-canal, #filtro-vend-canal', cfg.canais, 'Todos');
+      
+      // 3. Preenche as Contas Bancárias
+      var optsContas = ''; 
+      var optsFiltroContas = '<option value="">Todas</option>';
+      cfg.contas.forEach(function(c) { 
+        optsContas += `<option value="${c.nome}">${c.nome}</option>`; 
+        optsFiltroContas += `<option value="${c.nome}">${c.nome}</option>`; 
+      });
+      $('#c-conta, #v-conta, #f-conta, #f-conta-destino').html(optsContas);
+      $('#filtro-fin-conta').html(optsFiltroContas);
+      
+      // Menu Lateral de Configurações
+      renderListaConfig('#lista-canais', cfg.canais, 'Configuracoes', 1);
+      renderListaConfig('#lista-plataformas', cfg.plataformas, 'Configuracoes', 2);
+      renderListaConfig('#lista-catDespesas', cfg.catDespesas, 'Configuracoes', 3);
+      renderListaConfig('#lista-catReceitas', cfg.catReceitas, 'Configuracoes', 4);
+      
+      var liContas = ''; 
+      cfg.contas.forEach(function(c) {
+        liContas += `
+        <div class="config-item d-flex justify-content-between align-items-center py-2 border-bottom">
+          <span><span class="color-dot" style="background:${c.cor}"></span><span class="fw-bold text-secondary">${c.nome}</span></span>
+          <div>
+            <button class="btn btn-sm btn-outline-primary me-1" onclick="editarConta('${c.nome}', '${c.cor}')" title="Editar Conta"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deletarConfig('Contas', 1, '${c.nome}')" title="Excluir"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>`;
+      });
+      $('#lista-contas').html(liContas);
+      
+      carregarListaClientes();
+    }).obterConfiguracoes();
+  }
+
+  function carregarListaClientes() {
+    google.script.run.withSuccessHandler(function(cli) {
+      var opts = '<option value="NÃO INFORMADO" selected>Cliente Padrão / Balcão Avulso</option>';
+      cli.forEach(function(c) { 
+          opts += `<option value="${c.nome}">${c.nome}</option>`; 
+      });
+      $('.dropdown-clientes').html(opts);
+    }).obterClientes();
+  }
+
+  function carregarIdsEstoque() {
+    google.script.run.withSuccessHandler(function(ids) {
+      htmlOptionsEstoque = '<option value="NENHUM">Nenhuma Peça (Apenas Serviço)</option>';
+      ids.forEach(function(i) { 
+          htmlOptionsEstoque += `<option value="${i.id}">${i.descricao}</option>`; 
+      });
+      $('.dropdown-ids').html(htmlOptionsEstoque);
+    }).obterIdsCompras();
+  }
+  
+  function renderListaConfig(seletor, array, aba, col) { 
+    var html = ''; 
+    array.forEach(function(i) {
+      html += `
+      <div class="config-item d-flex justify-content-between align-items-center py-2 border-bottom">
+        <span class="fw-bold text-secondary">${i}</span>
+        <div>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick="editarNomeGenerico('${aba}', ${col}, '${i}')" title="Editar Nome"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deletarConfig('${aba}', ${col}, '${i}')" title="Excluir"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>`;
+    }); 
+    $(seletor).html(html); 
+  }
+
+  function trocarCategoriaFin(tipo) { 
+    if (tipo === 'Transferência') {
+      $('#caixa-conta-destino').show();
+      $('#f-conta-destino').prop('required', true);
+      $('#label-conta-origem').text('Conta Origem');
+      $('#caixa-categoria').hide();
+      $('#caixa-recorrencia').hide();
+      $('#f-cat').html('<option value="Transferência">Transferência</option>');
+    } else {
+      $('#caixa-conta-destino').hide();
+      $('#f-conta-destino').prop('required', false);
+      $('#label-conta-origem').text('Conta');
+      $('#caixa-categoria').show();
+      $('#caixa-recorrencia').show();
+      preencherSelect('#f-cat', tipo === 'Despesa' ? configSistema.catDespesas : configSistema.catReceitas); 
+    }
+  }
+
+  // ==========================================
+  // FILTROS AVANÇADOS (CUSTOM SEARCH)
+  // ==========================================
+  
+  // Limpador absoluto: arranca ícones, crachás e HTML para o filtro conseguir ler o texto
+  function stripHtml(html) { 
+      return html ? String(html).replace(/<[^>]*>?/gm, '').trim() : ''; 
+  }
+  
+  function limparMoeda(str) { 
+    if(!str || str === '-') return 0;
+    var num = String(str).replace(/[R$\s\.\+]/g, '').replace(',', '.');
+    return parseFloat(num) || 0;
+  }
+
+  $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+    var tableId = settings.nTable.id;
+    
+    function toYMD(dStr) {
+      if (!dStr) return '';
+      if (dStr.indexOf('/') !== -1) { 
+          var p = dStr.split('/'); 
+          return p[2] + '-' + p[1] + '-' + p[0]; 
+      }
+      return dStr;
+    }
+    
+    if (tableId === 'tabelaClientes') {
+      var canal = $('#filtro-cli-canal').val() || '';
+      var cRow = stripHtml(data[3]);
+      
+      if (canal !== '' && cRow !== canal) return false;
+    }
+    else if (tableId === 'tabelaCompras') {
+      var ini = $('#filtro-comp-data-ini').val();
+      var fim = $('#filtro-comp-data-fim').val();
+      var qMin = parseFloat($('#filtro-comp-qtd-min').val());
+      var qMax = parseFloat($('#filtro-comp-qtd-max').val());
+      var vMin = parseFloat($('#filtro-comp-val-min').val());
+      var vMax = parseFloat($('#filtro-comp-val-max').val());
+      var status = $('#filtro-comp-status').val() || '';
+      
+      var dRow = toYMD(data[1]);
+      var qRow = parseFloat(data[3]);
+      var vRow = limparMoeda(data[4]);
+      var sRow = stripHtml(data[6]);
+      
+      if (ini && dRow < ini) return false;
+      if (fim && dRow > fim) return false;
+      if (!isNaN(qMin) && qRow < qMin) return false;
+      if (!isNaN(qMax) && qRow > qMax) return false;
+      if (!isNaN(vMin) && vRow < vMin) return false;
+      if (!isNaN(vMax) && vRow > vMax) return false;
+      if (status !== '' && sRow !== status) return false;
+    } 
+    else if (tableId === 'tabelaVendas') {
+      var ini = $('#filtro-vend-data-ini').val();
+      var fim = $('#filtro-vend-data-fim').val();
+      var vMin = parseFloat($('#filtro-vend-val-min').val());
+      var vMax = parseFloat($('#filtro-vend-val-max').val());
+      var tipo = $('#filtro-vend-tipo').val() || '';
+      var canal = $('#filtro-vend-canal').val() || '';
+      
+      var dRow = toYMD(data[2]);
+      var vRow = limparMoeda(data[4]);
+      var cRow = stripHtml(data[7]);
+      var tRow = stripHtml(data[10]);
+      
+      if (ini && dRow < ini) return false;
+      if (fim && dRow > fim) return false;
+      if (!isNaN(vMin) && vRow < vMin) return false;
+      if (!isNaN(vMax) && vRow > vMax) return false;
+      if (tipo !== '' && tRow !== tipo) return false;
+      if (canal !== '' && cRow !== canal) return false;
+    }
+    else if (tableId === 'tabelaCatalogo') {
+      var ini = $('#filtro-cat-data-ini').val(), fim = $('#filtro-cat-data-fim').val();
+      var vMin = parseFloat($('#filtro-cat-val-min').val()), vMax = parseFloat($('#filtro-cat-val-max').val());
+      var tipo = $('#filtro-cat-tipo').val() || '', status = $('#filtro-cat-status').val() || '';
+      
+      var dRow = toYMD(data[1]), vRow = limparMoeda(data[4]), tRow = stripHtml(data[3]), sRow = stripHtml(data[7]);
+      
+      if (ini && dRow < ini) return false;
+      if (fim && dRow > fim) return false;
+      if (!isNaN(vMin) && vRow < vMin) return false;
+      if (!isNaN(vMax) && vRow > vMax) return false;
+      if (tipo !== '' && tRow !== tipo) return false;
+      if (status !== '' && sRow !== status) return false;
+    }
+    else if (tableId === 'tabelaFinanceiro') {
+      var ini = $('#filtro-fin-data-ini').val();
+      var fim = $('#filtro-fin-data-fim').val();
+      var vMin = parseFloat($('#filtro-fin-val-min').val());
+      var vMax = parseFloat($('#filtro-fin-val-max').val());
+      var global = $('#filtro-fin-global').val() || '';
+      var tipo = $('#filtro-fin-tipo').val() || '';
+      var conta = $('#filtro-fin-conta').val() || '';
+      
+      var dRow = toYMD(data[1]);
+      var globRow = stripHtml(data[2]);
+      var tipoRow = stripHtml(data[3]);
+      var valRow = limparMoeda(stripHtml(data[6]));
+      var contRow = stripHtml(data[7]);
+      
+      if (ini && dRow < ini) return false;
+      if (fim && dRow > fim) return false;
+      if (!isNaN(vMin) && valRow < vMin) return false;
+      if (!isNaN(vMax) && valRow > vMax) return false;
+      if (global !== '' && globRow.indexOf(global) === -1) return false;
+      if (tipo !== '' && tipoRow.indexOf(tipo) === -1) return false;
+      if (conta !== '' && contRow !== conta) return false;
+    }
+    return true;
+  });
+
+  $(document).on('input change', '.filtro-tabela', function() {
+    var tableId = $(this).closest('.section-view').find('table').attr('id');
+    if(dtInstancias[tableId.replace('tabela','')]) {
+        dtInstancias[tableId.replace('tabela','')].draw();
+    }
+  });
+
+  function limparFiltros(aba) {
+    $('#modulo-' + aba.toLowerCase() + ' .filtro-tabela').val('');
+    if(dtInstancias[aba]) {
+        dtInstancias[aba].draw();
+    }
+  }
+
+  // ==========================================
+  // MOTOR DE TABELAS (COM STATE E ORDENAÇÃO DE DATA)
+  // ==========================================
+  
+  // Função para renderizar YYYY-MM-DD em DD/MM/YYYY visualmente (Com proteção)
+  var renderDataBR = function(data, type, row) {
+    if (type === 'display' && typeof data === 'string' && data.indexOf('-') === 4) {
+      var p = data.split('-'); 
+      if(p.length === 3) {
+          return `${p[2]}/${p[1]}/${p[0]}`;
+      }
+    }
+    return data;
+  };
+
+  function getOpcoesDataTable(aba, colunasDef) {
+    var orderCol = 0; 
+    if(aba === 'Compras' || aba === 'Financeiro') orderCol = 1;
+    else if(aba === 'Vendas') orderCol = 2;
+    else if(aba === 'Catalogo') orderCol = 1;
+
+    return {
+      stateSave: true, 
+      stateLoadParams: function(settings, data) {
+        if (data.columns.length !== colunasDef.length) return false;
+      },
+      pageLength: 20,  
+      lengthMenu: [[20, 50, 100, -1], [20, 50, 100, "Todos"]],
+      language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' }, 
+      responsive: true, 
+      order: [[orderCol, 'desc']], 
+      columns: colunasDef
+    };
+  }
+
+  function gerarTabelaPadrao(nomeAba, idHtml, colunasOriginais, funcaoBackend) {
+    // Exibe o spinner de carregamento inicial
+    if (!dtInstancias[nomeAba]) {
+      $(idHtml).html(`<tbody><tr><td class="text-center py-4 text-muted" colspan="${colunasOriginais.length}"><div class="spinner-border spinner-border-sm text-primary"></div> Sincronizando...</td></tr></tbody>`);
+    }
+    
+    google.script.run.withSuccessHandler(function(res) {
+      // Destrói instância existente para evitar conflitos de cache/colunas
+      if (dtInstancias[nomeAba]) {
+        dtInstancias[nomeAba].destroy(); 
+      }
+      $(idHtml).empty();
+      
+      // Processa os dados brutos e insere os botões de ação
+      var data = (res.dados || res || []).map(function(l) {
+        var id = l[0];
+        var btns = `
+          <button class="btn btn-sm btn-outline-primary shadow-sm me-1" onclick="abrirEdicao('${nomeAba}', '${id}')" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger shadow-sm" onclick="confirmarExclusao('${nomeAba}', '${id}')" title="Excluir"><i class="bi bi-trash"></i></button>
+        `;
+        
+        while (l.length < colunasOriginais.length - 1) {
+          l.push('-');
+        }
+        l[colunasOriginais.length - 1] = btns; 
+        return l;
+      });
+
+      // Aplica renderizadores de data (YYYY-MM-DD -> DD/MM/YYYY) conforme a aba
+      var colsFinal = JSON.parse(JSON.stringify(colunasOriginais)); 
+      if (nomeAba === 'Compras') colsFinal[1].render = renderDataBR;
+      if (nomeAba === 'Vendas') colsFinal[2].render = renderDataBR;
+      if (nomeAba === 'Catalogo') {
+        colsFinal[1].render = renderDataBR; // Mantém a data BR
+        // NOVO: Renderiza apenas o nome do canal e esconde a URL na tabela
+        colsFinal[6].render = function(data, type, row) {
+          if (type === 'display' && data && data !== '-') {
+            return data.split(', ').map(function(item) {
+              return item.split('|')[0]; // Pega só o que vem antes do "|"
+            }).join(', ');
+          }
+          return data;
+        };
+      }
+
+      // Inicializa o DataTable com as opções globais (stateSave, tradução, etc)
+      var opt = getOpcoesDataTable(nomeAba, colsFinal);
+      opt.data = data;
+      dtInstancias[nomeAba] = $(idHtml).DataTable(opt);
+
+      // --- NOVO: Lógica de Clique para Ver Detalhes (Apenas para o Catálogo) ---
+      if (nomeAba === 'Catalogo') {
+        $(idHtml + ' tbody').off('click').on('click', 'tr', function (e) {
+          // Se o clique for nos botões de ação, não dispara o detalhamento
+          if ($(e.target).closest('button').length > 0) return;
+          
+          var rowData = dtInstancias['Catalogo'].row(this).data();
+          if (rowData) {
+            verDetalhesCatalogo(rowData[0]); // rowData[0] é o ID do Catálogo
+          }
+        });
+      }
+
+    }).withFailureHandler(function(erro) {
+      $(idHtml).empty();
+      $(idHtml).html(`<tbody><tr><td class="text-center py-4 text-danger" colspan="${colunasOriginais.length}"><i class="bi bi-exclamation-triangle"></i> Falha ao carregar dados. Atualize a página.</td></tr></tbody>`);
+    })[funcaoBackend]();
+  }
+
+  function gerarTabelaFinanceiro() {
+    var idHtml = '#tabelaFinanceiro';
+    // Trocamos ID Relacionado por Status nas colunas
+    var colsF = [{title:"ID"},{title:"Data", render: renderDataBR},{title:"Global"},{title:"Tipo"},{title:"Categoria"},{title:"Descrição"},{title:"Valor"},{title:"Conta"},{title:"Status"}, {title:"Ações", orderable:false}];
+    
+    if(!dtInstancias['Financeiro']) {
+        $(idHtml).html(`<tbody><tr><td class="text-center py-4 text-muted" colspan="${colsF.length}"><div class="spinner-border spinner-border-sm text-primary"></div> Sincronizando extrato...</td></tr></tbody>`);
+    }
+    
+    google.script.run.withSuccessHandler(function(res) {
+      if(dtInstancias['Financeiro']) {
+          dtInstancias['Financeiro'].destroy(); 
+      }
+      $(idHtml).empty();
+      
+      // Variáveis para calcular os totais dos cards
+      var totR = 0; 
+      var totD = 0;
+
+      var data = (res.dados || res || []).map(function(l) {
+        var tipo = l[2];
+        var valStr = l[5] || "R$ 0,00";
+        var global = l[8] || 'Empresa';
+        
+        // NOVO: Captura o status (Coluna J / Índice 9). Se vazio, assume 'Pago'.
+        var statusTxt = l[9] || 'Pago'; 
+        var badgeStatus = statusTxt === 'Pago' ? '<span class="badge bg-success">Pago</span>' : '<span class="badge bg-secondary"><i class="bi bi-clock-history"></i> Pendente</span>';
+
+        // --- Lógica restaurada: Somar Receitas e Despesas APENAS SE ESTIVER PAGO ---
+        if (statusTxt === 'Pago') {
+            var valNum = parseFloat(String(valStr).replace('R$ ', '').replace(/\./g,'').replace(',','.'));
+            if (!isNaN(valNum)) { 
+                if (tipo === 'Receita') totR += valNum; 
+                else if (tipo === 'Despesa') totD += valNum; 
+            }
+        }
+        // ----------------------------------------------------
+
+        var badge = global === 'Casa' ? '<span class="badge bg-warning text-dark">Casa</span>' : '<span class="badge bg-primary">Empresa</span>';
+        
+        if (tipo === 'Receita') { 
+            l[2] = '<span class="text-success fw-bold"><i class="bi bi-arrow-up"></i> Receita</span>'; 
+            l[5] = `<span class="text-success fw-bold">+ ${valStr}</span>`; 
+        } 
+        else if (tipo === 'Despesa') { 
+            l[2] = '<span class="text-danger fw-bold"><i class="bi bi-arrow-down"></i> Despesa</span>'; 
+            l[5] = `<span class="text-danger fw-bold">- ${valStr}</span>`; 
+        } 
+        else { 
+            l[2] = '<span class="text-info fw-bold">Transferência</span>'; 
+            l[5] = `<span class="fw-bold">${valStr}</span>`; 
+        }
+        
+        var btns = `
+          <button class="btn btn-sm btn-outline-primary shadow-sm me-1" onclick="abrirEdicao('Financeiro', '${l[0]}')" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger shadow-sm" onclick="confirmarExclusao('Financeiro', '${l[0]}')" title="Excluir"><i class="bi bi-trash"></i></button>
+        `;
+        
+        // Inserimos o badgeStatus no lugar do antigo ID Relacionado
+        var lf = [l[0], l[1], badge, l[2], l[3], l[4], l[5], l[6], badgeStatus];
+        
+        while (lf.length < colsF.length - 1) {
+            lf.push('-'); 
+        }
+        lf[colsF.length - 1] = btns; 
+        return lf;
+      });
+
+      // Atualiza os Cards usando formatação monetária oficial (R$ 1.500,00)
+      $('#fin-total-entradas').text('R$ ' + totR.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+      $('#fin-total-saidas').text('R$ ' + totD.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+      var bal = totR - totD;
+      $('#fin-balanco').text('R$ ' + bal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})).css('color', bal >= 0 ? '#10b981' : '#ef4444');
+
+      var opt = getOpcoesDataTable('Financeiro', colsF);
+      opt.data = data;
+      dtInstancias['Financeiro'] = $(idHtml).DataTable(opt);
+    }).getTabelaFinanceiro();
+  }
+
+  // ==========================================
+  // LÓGICA DE CARRINHOS (COMPRAS E VENDAS)
+  // ==========================================
+  function addLinhaItemCompra(modelo = '', qtd = 1, custo = 0) {
+    var html = `
+    <div class="row item-compra align-items-end mb-3 pb-2 border-bottom">
+        <div class="col-md-6">
+            <label class="form-label mb-1 text-muted" style="font-size:0.85rem">Modelo / Equipamento / Peça</label>
+            <input type="text" class="form-control item-modelo" value="${modelo}" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label mb-1 text-muted" style="font-size:0.85rem">Qtd</label>
+            <input type="number" class="form-control item-qtd" value="${qtd}" min="1" oninput="calcularTotalCompra()" required>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label mb-1 text-muted" style="font-size:0.85rem">Custo Unitário (R$)</label>
+            <input type="number" step="0.01" class="form-control item-custo" value="${custo}" oninput="calcularTotalCompra()" required>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger w-100 btn-remover-item" onclick="$(this).closest('.item-compra').remove(); calcularTotalCompra();"><i class="bi bi-trash"></i></button>
+        </div>
+    </div>`;
+    $('#lista-itens-compra').append(html);
+    calcularTotalCompra();
+  }
+
+  function calcularTotalCompra() {
+    var total = 0;
+    $('.item-compra').each(function() {
+        var q = parseFloat($(this).find('.item-qtd').val()) || 0;
+        var c = parseFloat($(this).find('.item-custo').val()) || 0;
+        total += (q * c);
+    });
+    var frete = parseFloat($('#c-frete').val()) || 0;
+    total += frete;
+    
+    $('#c-total-display').text('R$ ' + total.toFixed(2).replace('.', ','));
+    
+    if ($('.item-compra').length <= 1) {
+        $('.btn-remover-item').prop('disabled', true);
+    } else {
+        $('.btn-remover-item').prop('disabled', false);
+    }
+  }
+
+  $('#c-frete').on('input', calcularTotalCompra);
+
+  function addLinhaItemVenda(idSel = '', q = 1) {
+    var uniq = Date.now() + Math.floor(Math.random() * 1000); 
+    var html = `
+    <div class="row item-venda align-items-end mb-2">
+        <div class="col-md-8">
+            <select class="form-select dropdown-ids item-venda-id" id="sel-${uniq}">${htmlOptionsEstoque}</select>
+        </div>
+        <div class="col-md-3">
+            <input type="number" class="form-control item-venda-qtd" value="${q}" min="1">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger w-100" onclick="$(this).closest('.row').remove();"><i class="bi bi-trash"></i></button>
+        </div>
+    </div>`;
+    $('#lista-itens-venda').append(html);
+    
+    if(idSel) {
+        $(`#sel-${uniq}`).val(idSel);
+    }
+  }
+
+  // ==========================================
+  // SUBMISSÕES DE FORMULÁRIO (SALVAR)
+  // ==========================================
+  function enviarCliente(e) {
+    e.preventDefault();
+    var btn = $('#btn-cliente');
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    var dados = {
+      id: idEdicaoAtual,
+      nome: $('#cli-nome').val(),
+      telefone: $('#cli-tel').val(),
+      canal: $('#cli-canal').val(),
+      obs: $('#cli-obs').val()
+    };
+    
+    var funcao = idEdicaoAtual ? 'editarRegistro' : 'salvarCliente';
+    
+    google.script.run.withSuccessHandler(function(r) {
+      btn.prop('disabled', false).text('Salvar');
+      if(r && r.sucesso) {
+        $('#modalCliente').modal('hide');
+        Swal.fire({icon: 'success', title: 'Sucesso', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false});
+        mudarAba('modulo-clientes');
+        carregarListaClientes(); 
+      } else {
+        Swal.fire('Erro', r.erro, 'error');
+      }
+    })[funcao](idEdicaoAtual ? 'Clientes' : dados, idEdicaoAtual ? dados : undefined);
+  }
+
+  function enviarCompra(e) {
+    e.preventDefault();
+    var btn = $('#btn-compra');
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    var itens = [];
+    $('.item-compra').each(function() {
+        itens.push({
+            modelo: $(this).find('.item-modelo').val(),
+            qtd: parseFloat($(this).find('.item-qtd').val()) || 1,
+            custo: parseFloat($(this).find('.item-custo').val()) || 0
+        });
+    });
+
+    var dados = {
+      id: idEdicaoAtual,
+      data: $('#c-data').val(),
+      freteTotal: $('#c-frete').val(),
+      conta: $('#c-conta').val(),
+      obs: $('#c-obs').val(),
+      itens: itens
+    };
+
+    var funcao = idEdicaoAtual ? 'editarRegistro' : 'salvarCompra';
+    
+    google.script.run.withSuccessHandler(function(r) {
+      btn.prop('disabled', false).text('Salvar Compra');
+      if(r && r.sucesso) {
+        $('#modalCompra').modal('hide');
+        Swal.fire({icon: 'success', title: 'Sucesso', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false});
+        mudarAba('modulo-compras');
+      } else {
+        Swal.fire('Erro', r.erro, 'error');
+      }
+    })[funcao](idEdicaoAtual ? 'Compras' : dados, idEdicaoAtual ? dados : undefined);
+  }
+
+  function enviarVenda(e) {
+    e.preventDefault();
+    var btn = $('#btn-venda');
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    var itens = [];
+    var idCat = null;
+
+    if ($('#v-modo').val() === 'Catalogo') {
+      idCat = $('#v-idCatalogo').val();
+      if(!idCat) {
+        Swal.fire('Atenção', 'Selecione um produto do catálogo.', 'warning');
+        btn.prop('disabled', false).text('Salvar OS / Venda');
+        return;
+      }
+      var catItem = dadosCatalogoDisponivel.find(c => c.id === idCat);
+      if (catItem && catItem.idOrigem && catItem.idOrigem !== 'NENHUM') {
+        var origens = catItem.idOrigem.split(', ');
+        var mapQtd = {};
+        origens.forEach(o => { 
+          let trimId = o.trim(); 
+          if(trimId) mapQtd[trimId] = (mapQtd[trimId] || 0) + 1; 
+        });
+        for (let key in mapQtd) itens.push({ idOrigem: key, qtd: mapQtd[key] });
+      }
+    } else {
+      $('.item-venda').each(function() {
+        itens.push({
+            idOrigem: $(this).find('.item-venda-id').val(),
+            qtd: parseFloat($(this).find('.item-venda-qtd').val()) || 1
+        });
+      });
+    }
+    
+    var dados = {
+      id: idEdicaoAtual,
+      data: $('#v-data').val(),
+      tipo: $('#v-tipo').val(),
+      cliente: $('#v-cliente').val(),
+      peca: $('#v-peca').val(),
+      itensUsados: itens, 
+      valorProduto: $('#v-valorProd').val(),
+      valorFrete: $('#v-valorFrete').val(),
+      custoFrete: $('#v-custoFrete').val(), 
+      canal: $('#v-canal').val(),
+      conta: $('#v-conta').val(),
+      obs: $('#v-obs').val(),
+      idCatalogo: idCat
+    };
+
+    var funcao = idEdicaoAtual ? 'editarRegistro' : 'salvarVenda';
+    
+    google.script.run.withSuccessHandler(function(r) {
+      btn.prop('disabled', false).text('Salvar OS / Venda');
+      if(r && r.sucesso) {
+        $('#modalVenda').modal('hide');
+        Swal.fire({icon: 'success', title: 'Sucesso', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false});
+        mudarAba('modulo-vendas');
+      } else {
+        Swal.fire('Erro', r.erro, 'error');
+      }
+    })[funcao](idEdicaoAtual ? 'Vendas' : dados, idEdicaoAtual ? dados : undefined);
+  }
+
+  function carregarCanaisNoModalCatalogo(dadosSalvos = null) {
+    var container = $('#container-canais-catalogo');
+    container.empty();
+    
+    var linksMap = {};
+    if (dadosSalvos) {
+        dadosSalvos.split(', ').forEach(item => {
+            let partes = item.split('|');
+            if (partes.length > 1) linksMap[partes[0]] = partes[1];
+            else linksMap[partes[0]] = "";
+        });
+    }
+
+    if (configSistema.canais && configSistema.canais.length > 0) {
+        configSistema.canais.forEach(function(canal) {
+            var isChecked = linksMap[canal] !== undefined ? 'checked' : '';
+            var valLink = linksMap[canal] || "";
+            var displayLink = isChecked ? 'block' : 'none';
+
+            // Usamos $this.closest para evitar conflitos com nomes de canais contendo espaços
+            var html = `
+            <div class="canal-wrapper border rounded p-2 mb-2 bg-light shadow-sm w-100">
+                <div class="form-check">
+                    <input class="form-check-input chk-canal-cat" type="checkbox" value="${canal}" 
+                           ${isChecked} onchange="$(this).closest('.canal-wrapper').find('.div-link-canal').toggle(this.checked)">
+                    <label class="form-check-label fw-bold text-dark cursor-pointer">${canal}</label>
+                </div>
+                <div class="mt-2 div-link-canal" style="display: ${displayLink}">
+                    <input type="url" class="form-control form-control-sm input-link-canal border-primary" 
+                           placeholder="URL do anúncio no ${canal}" value="${valLink}">
+                </div>
+            </div>`;
+            container.append(html);
+        });
+    } else {
+        container.html('<small class="text-muted">Nenhum canal cadastrado.</small>');
+    }
+}
+
+function enviarCatalogo(e) {
+    e.preventDefault();
+    var btn = $('#btn-cat');
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+    var itensVinculados = [];
+    $('.item-cat-id').each(function() {
+        var val = $(this).val();
+        if(val && val !== 'NENHUM') itensVinculados.push(val);
+    });
+
+    var canaisComLinks = [];
+    $('.chk-canal-cat:checked').each(function() {
+        var canal = $(this).val();
+        var link = $(this).closest('.canal-wrapper').find('.input-link-canal').val() || "";
+        canaisComLinks.push(`${canal}|${link}`);
+    });
+
+    var dados = {
+        id: idEdicaoAtual,
+        data: $('#cat-data').val(),
+        tipo: $('#cat-tipo').val(),
+        status: $('#cat-status').val(),
+        nome: $('#cat-nome').val(),
+        valor: $('#cat-valor').val(),
+        idOrigem: itensVinculados.join(', '),
+        canais: canaisComLinks.join(', '),
+        obs: $('#cat-link').val() // Lê o seu campo de observação
+    };
+
+    var funcao = idEdicaoAtual ? 'editarRegistro' : 'salvarCatalogo';
+
+    google.script.run.withSuccessHandler(function(r) {
+        btn.prop('disabled', false).text('Salvar Catálogo');
+        if(r.sucesso) {
+            $('#modalCatalogo').modal('hide');
+            mudarAba('modulo-catalogo');
+            Swal.fire({icon:'success', title:'Atualizado', toast:true, position:'top-end', timer:2000, showConfirmButton:false});
+        } else {
+            Swal.fire('Erro', r.erro, 'error');
+        }
+    })[funcao](idEdicaoAtual ? 'Catalogo' : dados, idEdicaoAtual ? dados : undefined);
+}
+
+// Função para adicionar linha de estoque no modal de catálogo
+function addLinhaItemCatalogo(idSel = '') {
+    var uniq = Date.now() + Math.floor(Math.random() * 1000);
+    var html = `
+    <div class="row item-vinculo-catalogo align-items-end mb-2">
+        <div class="col-md-10">
+            <select class="form-select form-select-sm dropdown-ids item-cat-id" id="sel-cat-${uniq}">${htmlOptionsEstoque}</select>
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="$(this).closest('.row').remove();"><i class="bi bi-trash"></i></button>
+        </div>
+    </div>`;
+    $('#lista-itens-catalogo').append(html);
+    if(idSel) $(`#sel-cat-${uniq}`).val(idSel);
+}
+
+  function enviarFinanceiroAvulso(e) {
+    e.preventDefault();
+    var btn = $('#btn-fin');
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    
+    var dados = {
+      id: idEdicaoAtual,
+      data: $('#f-data').val(),
+      catGlobal: $('#f-cat-global').val(),
+      tipo: $('#f-tipo').val(),
+      categoria: $('#f-cat').val(),
+      descricao: $('#f-desc').val(),
+      valor: $('#f-valor').val(),
+      conta: $('#f-conta').val(),
+      contaDestino: $('#f-conta-destino').val(),
+      recorrencia: $('#f-recorrencia').val(),
+      status: $('#f-status').is(':checked') ? 'Pago' : 'Pendente' // <-- NOVO
+    };
+    
+    if(idEdicaoAtual) {
+      google.script.run.withSuccessHandler(function(r) {
+        btn.prop('disabled', false).text('Salvar');
+        if(r.sucesso) { 
+            $('#modalFinanceiro').modal('hide'); 
+            mudarAba('modulo-financeiro'); 
+        }
+      }).editarRegistro('Financeiro', dados);
+    } else {
+      google.script.run.withSuccessHandler(function(r) {
+        btn.prop('disabled', false).text('Lançar');
+        if(r.sucesso) { 
+            $('#modalFinanceiro').modal('hide'); 
+            mudarAba('modulo-financeiro'); 
+        } else { 
+            Swal.fire('Erro', r.erro, 'error'); 
+        }
+      }).salvarFinanceiroGeral(dados); 
+    }
+  }
+
+  // ==========================================
+  // FUNÇÕES DE EDIÇÃO E EXCLUSÃO
+  // ==========================================
+  function abrirEdicao(aba, id) {
+    Swal.fire({
+        title: 'Carregando...', 
+        allowOutsideClick: false, 
+        didOpen: function() { Swal.showLoading(); }
+    });
+    idEdicaoAtual = id;
+    
+    google.script.run
+      .withFailureHandler(function(erro) {
+        Swal.close();
+        Swal.fire('Erro', 'Falha de comunicação: ' + erro, 'error');
+      })
+      .withSuccessHandler(function(res) {
+        Swal.close();
+        if(!res) {
+            Swal.fire('Erro', 'Registro não encontrado no banco de dados.', 'error');
+            return;
+        }
+        
+        try {
+          var dtRaw = res.raw[aba === 'Vendas' ? 2 : 1];
+          var dataFormatada = "";
+          
+          if (typeof dtRaw === 'string' && dtRaw.includes('/')) {
+             var p = dtRaw.split('/'); 
+             dataFormatada = `${p[2]}-${p[1]}-${p[0]}`;
+          } else if (dtRaw) {
+             var d = new Date(dtRaw); 
+             if (!isNaN(d.getTime())) {
+                 dataFormatada = d.toISOString().split('T')[0];
+             }
+          }
+
+          if(aba === 'Clientes') {
+            $('#cli-nome').val(res.raw[1]); 
+            $('#cli-tel').val(res.raw[2]);
+            $('#cli-canal').val(res.raw[3]); 
+            $('#cli-obs').val(res.raw[4]);
+            $('#title-cliente').text('Editar Cliente'); 
+            $('#modalCliente').modal('show');
+          }
+          else if(aba === 'Compras') {
+            $('#c-data').val(dataFormatada); 
+            $('#c-frete').val(res.raw[5]); 
+            $('#c-obs').val(res.raw[7]);
+            $('#caixa-c-conta').hide(); 
+            $('#title-compra').text('Editar Compra');
+            $('#btn-add-item').hide(); 
+            $('#lista-itens-compra').empty();
+            
+            addLinhaItemCompra(res.raw[2], res.raw[3], res.raw[4]); 
+            $('#modalCompra').modal('show');
+          } 
+          else if(aba === 'Vendas') { 
+            $('#v-data').val(dataFormatada); 
+            $('#v-tipo').val(res.raw[10] || 'Venda'); 
+            $('#v-cliente').val(res.raw[11] || 'NÃO INFORMADO'); 
+            $('#v-peca').val(res.raw[8]); 
+            $('#v-valorProd').val(res.raw[4]); 
+            $('#v-valorFrete').val(res.raw[5]); 
+            $('#v-custoFrete').val(res.raw[6]); 
+            $('#v-canal').val(res.raw[7]); 
+            $('#v-obs').val(res.raw[9]); 
+            
+            $('#linha-modo-venda').hide(); // <--- É AQUI QUE DEVE FICAR!
+
+            $('#caixa-v-conta').hide(); 
+            $('#title-venda').text('Editar OS / Venda'); 
+            $('#lista-itens-venda').empty(); 
+            $('#aviso-edicao-venda').show(); 
+            $('#modalVenda').modal('show'); 
+          }
+          else if(aba === 'Catalogo') {
+            $('#cat-data').val(dataFormatada);
+            $('#cat-tipo').val(res.raw[3]);
+            $('#cat-status').val(res.raw[7]);
+            $('#cat-nome').val(res.raw[2]);
+            $('#cat-valor').val(res.raw[4]);
+            $('#cat-link').val(res.raw[8]); 
+            
+            carregarCanaisNoModalCatalogo(res.raw[6]); 
+
+            $('#lista-itens-catalogo').empty();
+            if (res.raw[5] && res.raw[5] !== 'NENHUM') {
+                var ids = res.raw[5].split(', ');
+                ids.forEach(id => addLinhaItemCatalogo(id));
+            }
+
+            $('#title-cat').text('Editar Produto');
+            $('#modalCatalogo').modal('show');
+          }
+          else if(aba === 'Financeiro') {
+            var tipoTransacao = String(res.raw[2] || '');
+            
+            if(tipoTransacao.includes('Transferência')) {
+                Swal.fire('Atenção', 'Para alterar uma transferência, exclua o lançamento no extrato e faça um novo.', 'info');
+                return;
+            }
+            
+            // Verifica se o lançamento vem de uma Compra/Venda (Não é AVULSO)
+            var isVinculado = (res.raw[7] && res.raw[7] !== 'AVULSO');
+            
+            // Preenche e trava (se for vinculado)
+            $('#f-data').val(dataFormatada).prop('disabled', isVinculado); 
+            $('#f-cat-global').val(res.raw[8] || 'Empresa').prop('disabled', isVinculado);
+            $('#f-tipo').val(tipoTransacao).prop('disabled', isVinculado); 
+            trocarCategoriaFin(tipoTransacao);
+            
+            setTimeout(function() { 
+                $('#f-cat').val(res.raw[3]).prop('disabled', isVinculado); 
+                $('#f-conta').val(res.raw[6]).prop('disabled', isVinculado); 
+            }, 100);
+            
+            $('#f-desc').val(res.raw[4]).prop('disabled', isVinculado); 
+            $('#f-valor').val(res.raw[5]).prop('disabled', isVinculado); 
+            $('#f-recorrencia').prop('disabled', true);
+            
+            $('#f-status').prop('checked', (res.raw[9] !== 'Pendente')).trigger('change');
+            
+            // Mostra aviso se for vinculado
+            $('#aviso-fin-vinculado').remove();
+            if(isVinculado) {
+                $('#formFinanceiro .modal-body').prepend('<div id="aviso-fin-vinculado" class="alert alert-warning py-2 mb-3 small"><i class="bi bi-exclamation-triangle"></i> <b>Lançamento Automático:</b> Você pode alterar apenas a Situação (Pago/Pendente) aqui. Altere valores ou data através do painel de Vendas/Compras.</div>');
+            }
+            
+            $('#modalFinanceiro').modal('show');
+          }
+        } catch(e) { 
+            Swal.fire('Erro na Interface', e.toString(), 'error'); 
+        }
+      }).obterRegistroParaEdicao(aba, id);
+  }
+
+  function confirmarExclusao(aba, id) {
+    Swal.fire({
+      title: 'Excluir?', 
+      text: aba === 'Clientes' ? "Deseja apagar o registro desse cliente?" : "Isso apagará também os registros financeiros vinculados.",
+      icon: 'warning', 
+      showCancelButton: true, 
+      confirmButtonText: 'Sim, excluir'
+    }).then(function(res) {
+      if (res.isConfirmed) {
+          google.script.run.withSuccessHandler(function(r) { 
+              if(r.sucesso) mudarAba('modulo-' + aba.toLowerCase()); 
+          }).excluirRegistro(aba, id);
+      }
+    });
+  }
+
+  // ==========================================
+  // CONFIGURAÇÕES (EDIÇÃO DE NOME E COR)
+  // ==========================================
+  function editarConta(nomeAntigo, corAtual) {
+    Swal.fire({
+      title: 'Editar Conta',
+      html: `
+        <input id="swal-input-nome" class="swal2-input" value="${nomeAntigo}" placeholder="Nome da conta">
+        <div class="mt-3 d-flex align-items-center justify-content-center gap-2">
+            <label for="swal-input-cor" class="mb-0 fw-bold">Cor Visual:</label>
+            <input type="color" id="swal-input-cor" class="form-control form-control-color" value="${corAtual}">
+        </div>
+      `,
+      focusConfirm: false, 
+      showCancelButton: true, 
+      confirmButtonText: 'Salvar', 
+      cancelButtonText: 'Cancelar',
+      preConfirm: () => {
+        const novoNome = document.getElementById('swal-input-nome').value;
+        const novaCor = document.getElementById('swal-input-cor').value;
+        if (!novoNome) {
+            Swal.showValidationMessage('O nome da conta é obrigatório');
+        }
+        return { nome: novoNome, cor: novaCor };
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const { nome, cor } = result.value;
+        Swal.fire({title: 'Salvando...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        
+        google.script.run.withSuccessHandler(function(res) {
+          if(res.sucesso) { 
+              Swal.fire('Atualizado!', 'Conta atualizada com sucesso.', 'success'); 
+              carregarConfiguracoes(); 
+              carregarDashboard(); 
+          } else {
+              Swal.fire('Erro', res.erro, 'error');
+          }
+        }).editarContaServidor(nomeAntigo, nome, cor);
+      }
+    });
+  }
+
+  function editarNomeGenerico(aba, col, nomeAntigo) {
+    Swal.fire({
+      title: 'Renomear Item', 
+      input: 'text', 
+      inputValue: nomeAntigo, 
+      showCancelButton: true, 
+      confirmButtonText: 'Salvar', 
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed && result.value && result.value !== nomeAntigo) {
+        Swal.fire({title: 'Salvando...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        
+        google.script.run.withSuccessHandler(function(res) {
+          if(res.sucesso) { 
+              Swal.fire('Atualizado!', '', 'success'); 
+              carregarConfiguracoes(); 
+          } else {
+              Swal.fire('Erro', res.erro, 'error');
+          }
+        }).renomearConfigGenericaServidor(aba, col, nomeAntigo, result.value);
+      }
+    });
+  }
+
+  function deletarConfig(aba, col, val) {
+    if(confirm('Remover "' + val + '"?')) {
+      google.script.run.withSuccessHandler(function(){ 
+          carregarConfiguracoes(); 
+          if(aba === 'Contas') carregarDashboard(); 
+      }).excluirItemConfiguracao(aba, col, val);
+    }
+  }
+
+  function addConta() {
+    google.script.run.withSuccessHandler(function(){ 
+        carregarConfiguracoes(); 
+        carregarDashboard(); 
+    }).adicionarItemConfiguracao('Contas', 1, $('#nova-conta').val(), $('#nova-conta-cor').val());
+    
+    $('#nova-conta').val('');
+  }
+
+  function addGenerico(aba, col, idInput) {
+    google.script.run.withSuccessHandler(carregarConfiguracoes).adicionarItemConfiguracao(aba, col, $('#'+idInput).val());
+    $('#'+idInput).val('');
+  }
+
+  // ==========================================
+  // MODAIS (ABERTURA LIMPA)
+  // ==========================================
+  function abrirModalCliente() { 
+      idEdicaoAtual = null; 
+      $('#formCliente')[0].reset(); 
+      $('#title-cliente').text('Ficha do Cliente'); 
+      $('#modalCliente').modal('show'); 
+  }
+  
+  function abrirModalCompra() { 
+      idEdicaoAtual = null; 
+      $('#caixa-c-conta').show(); 
+      $('#formCompra')[0].reset(); 
+      $('#title-compra').text('Registrar Compra'); 
+      $('#btn-add-item').show(); 
+      $('#lista-itens-compra').empty(); 
+      $('#c-data').val(new Date().toISOString().split('T')[0]); 
+      addLinhaItemCompra(); 
+      $('#modalCompra').modal('show'); 
+  }
+  
+  function abrirModalVenda() { 
+      idEdicaoAtual = null; 
+      $('#caixa-v-conta').show(); 
+      $('#formVenda')[0].reset(); 
+      $('#title-venda').text('OS / Venda'); 
+      $('#linha-modo-venda').show(); 
+      $('#lista-itens-venda').empty(); 
+      $('#aviso-edicao-venda').hide(); 
+      $('#v-data').val(new Date().toISOString().split('T')[0]); 
+      
+      carregarCatalogoVendas(); 
+      alternarModoVenda(); 
+      addLinhaItemVenda(); 
+      
+      $('#modalVenda').modal('show'); 
+  }
+
+  function abrirModalFinanceiro() { 
+      idEdicaoAtual = null; 
+      $('#formFinanceiro')[0].reset(); 
+      
+      // Limpa os travamentos e os avisos caso o modal tenha sido aberto antes para uma edição vinculada
+      $('#f-data, #f-cat-global, #f-tipo, #f-cat, #f-desc, #f-valor, #f-conta').prop('disabled', false);
+      $('#aviso-fin-vinculado').remove();
+      
+      $('#f-recorrencia').prop('disabled', false); 
+      $('#f-cat-global').val('Empresa'); 
+      trocarCategoriaFin($('#f-tipo').val()); 
+      $('#f-data').val(new Date().toISOString().split('T')[0]); 
+      
+      // Garante que um novo lançamento venha como "Pendente" por padrão
+      $('#f-status').prop('checked', false).trigger('change');
+      
+      $('#modalFinanceiro').modal('show'); 
+  }
+  
+  function abrirModalCatalogo() { 
+    idEdicaoAtual = null; 
+    $('#formCatalogo')[0].reset(); 
+    $('#lista-itens-catalogo').empty(); // Limpa as peças vinculadas
+    $('#title-cat').text('Registrar no Catálogo'); 
+    $('#cat-data').val(new Date().toISOString().split('T')[0]); 
+    
+    carregarCanaisNoModalCatalogo(); // <--- CHAMA AQUI PARA CRIAR OS CHECKBOXES
+    $('#modalCatalogo').modal('show'); 
+}
+
+  function verDetalhesCatalogo(id) {
+    Swal.fire({ 
+        title: 'Analisando Margem...', 
+        html: '<div class="spinner-border text-primary"></div>',
+        showConfirmButton: false,
+        allowOutsideClick: false
+    });
+    
+    google.script.run.withSuccessHandler(function(res) {
+        Swal.close();
+        
+        var html = `
+        <div class="text-start" style="font-size: 0.95rem;">
+            <h5 class="border-bottom pb-2 fw-bold text-dark">${res.nome}</h5>
+            <p class="mb-1"><strong>Tipo:</strong> ${res.tipo}</p>
+            <p class="mb-3"><strong>Status:</strong> ${res.status}</p>
+            
+            <div class="row text-center mb-4 g-2">
+                <div class="col-6">
+                    <div class="p-2 rounded bg-success-subtle border border-success">
+                        <small class="text-success fw-bold text-uppercase" style="font-size: 0.7rem;">Preço de Venda</small><br>
+                        <span class="h5 fw-bold text-success">${res.valorVenda}</span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-2 rounded bg-danger-subtle border border-danger">
+                        <small class="text-danger fw-bold text-uppercase" style="font-size: 0.7rem;">Custo das Peças</small><br>
+                        <span class="h5 fw-bold text-danger">${res.valorCustoTotal}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-body border-primary mb-3 py-2 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Margem de Lucro:</span>
+                    <span class="badge bg-primary fs-6">${res.margem}</span>
+                </div>
+            </div>
+
+            <h6 class="fw-bold"><i class="bi bi-box-seam"></i> Peças Vinculadas:</h6>
+            <ul class="list-group list-group-flush mb-3 border rounded" style="max-height: 150px; overflow-y:auto;">
+                ${res.detalheItens}
+            </ul>
+
+            <h6 class="fw-bold"><i class="bi bi-megaphone"></i> Canais Ativos:</h6>
+            <p class="text-muted small">${res.canais}</p>
+        </div>`;
+        
+        Swal.fire({
+            html: html,
+            confirmButtonText: 'Fechar',
+            confirmButtonColor: '#1f2937',
+            width: '550px'
+        });
+    }).obterDetalhesLucroCatalogo(id);
+}
+
+  function carregarCanaisNoModalCatalogo(dadosSalvos = null) {
+    var container = $('#container-canais-catalogo');
+    container.empty();
+    
+    var linksMap = {};
+    if (dadosSalvos) {
+        dadosSalvos.split(', ').forEach(item => {
+            let partes = item.split('|');
+            if (partes.length > 1) linksMap[partes[0]] = partes[1];
+            else linksMap[partes[0]] = "";
+        });
+    }
+
+    if (configSistema.canais && configSistema.canais.length > 0) {
+        configSistema.canais.forEach(function(canal) {
+            var isChecked = linksMap[canal] !== undefined ? 'checked' : '';
+            var valLink = linksMap[canal] || "";
+            var displayLink = isChecked ? 'block' : 'none';
+
+            // Usamos classes e 'this' para evitar qualquer quebra com espaços no nome do canal
+            var html = `
+            <div class="canal-wrapper border rounded p-2 mb-2 bg-light shadow-sm w-100">
+                <div class="form-check">
+                    <input class="form-check-input chk-canal-cat" type="checkbox" value="${canal}" 
+                           ${isChecked} onchange="$(this).closest('.canal-wrapper').find('.div-link-canal').toggle(this.checked)">
+                    <label class="form-check-label fw-bold text-dark cursor-pointer">${canal}</label>
+                </div>
+                <div class="mt-2 div-link-canal" style="display: ${displayLink}">
+                    <input type="url" class="form-control form-control-sm input-link-canal border-primary" 
+                           placeholder="URL do anúncio no ${canal}" value="${valLink}">
+                </div>
+            </div>`;
+            container.append(html);
+        });
+    } else {
+        container.html('<small class="text-muted">Nenhum canal cadastrado.</small>');
+    }
+}
+
+  function carregarCatalogoVendas() {
+    google.script.run.withSuccessHandler(function(ativos) {
+      dadosCatalogoDisponivel = ativos;
+      var opts = '<option value="">Selecione um produto ativo...</option>';
+      ativos.forEach(function(c) {
+        opts += `<option value="${c.id}">${c.nome} (R$ ${c.valor})</option>`;
+      });
+      $('#v-idCatalogo').html(opts);
+    }).obterCatalogoAtivo();
+  }
+
+  function alternarModoVenda() {
+    if($('#v-modo').val() === 'Catalogo') {
+      $('#caixa-selecao-catalogo').fadeIn();
+      $('#caixa-carrinho-venda').hide(); 
+      $('#v-tipo').val('Venda'); 
+    } else {
+      $('#caixa-selecao-catalogo').hide();
+      $('#caixa-carrinho-venda').fadeIn(); 
+      $('#v-idCatalogo').val('');
+      $('#v-peca').val('');
+      $('#v-valorProd').val('');
+    }
+  }
+
+  function preencherDadosCatalogo() {
+    var id = $('#v-idCatalogo').val();
+    var item = dadosCatalogoDisponivel.find(c => c.id === id);
+    if(item) {
+      $('#v-peca').val(item.nome);
+      $('#v-valorProd').val(item.valor);
+    } else {
+      $('#v-peca').val('');
+      $('#v-valorProd').val('');
+    }
+  }
+
+  $(document).on('change', '#f-status', function() {
+      if(this.checked) {
+          $('label[for="f-status"]').text('Situação: Pago').removeClass('text-secondary').addClass('text-success');
+      } else {
+          $('label[for="f-status"]').text('Situação: Pendente').removeClass('text-success').addClass('text-secondary');
+      }
+  })
+
+  // Lógica para recalcular o saldo total em tempo real e salvar a escolha na memória
+  $(document).on('change', '.chk-conta-dash', function() {
+      var contasOcultas = [];
+      var novoTotal = 0;
+      
+      $('.chk-conta-dash').each(function() {
+          var nome = $(this).data('nome');
+          var isChecked = $(this).is(':checked');
+          
+          if (!isChecked) {
+              contasOcultas.push(nome);
+          } else {
+              var saldoStr = $(this).closest('.account-item').find('.val-conta-dash').text();
+              var valNum = parseFloat(saldoStr.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
+              if(!isNaN(valNum)) novoTotal += valNum;
+          }
+      });
+      
+      // Salva no navegador e atualiza o número gigante no topo
+      localStorage.setItem('dashContasOcultas', JSON.stringify(contasOcultas));
+      $('#dash-total-contas').text(novoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  });
+
+  // ==========================================
+  // INICIALIZAÇÃO
+  // ==========================================
+  window.onload = function() {
+    carregarConfiguracoes();
+    carregarDashboard();
+  };
+</script>
