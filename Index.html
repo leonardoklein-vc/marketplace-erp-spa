@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FDTech ERP OS</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  
+  <?!= include('style'); ?>
+
+</head>
+<body>
+
+<div class="app-container">
+  
+  <div class="top-navbar">
+    <div class="brand"><i class="bi bi-cpu"></i> FDTech ERP</div>
+    <div class="nav-menu">
+      <div class="nav-item active" data-target="modulo-dashboard" onclick="mudarAba('modulo-dashboard')"><i class="bi bi-grid-1x2"></i> Painel</div>
+      <div class="nav-item" data-target="modulo-clientes" onclick="mudarAba('modulo-clientes')"><i class="bi bi-people"></i> Clientes</div>
+      <div class="nav-item" data-target="modulo-compras" onclick="mudarAba('modulo-compras')"><i class="bi bi-box-arrow-in-down"></i> Compras</div>
+      <div class="nav-item" data-target="modulo-vendas" onclick="mudarAba('modulo-vendas')"><i class="bi bi-tools"></i> Ordens/Vendas</div>
+      <div class="nav-item" data-target="modulo-catalogo" onclick="mudarAba('modulo-catalogo')"><i class="bi bi-shop"></i> Catálogo</div>
+      <div class="nav-item" data-target="modulo-financeiro" onclick="mudarAba('modulo-financeiro')"><i class="bi bi-bank"></i> Financeiro</div>
+      <div class="nav-item" data-target="modulo-config" onclick="mudarAba('modulo-config')"><i class="bi bi-gear"></i> Configurações</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    
+    <div id="modulo-dashboard" class="section-view active">
+      <div class="quick-action-bar bg-white shadow-sm rounded-3 p-3 mb-4 d-flex flex-wrap align-items-center gap-3">
+        <span class="fw-bold text-secondary me-2"><i class="bi bi-lightning-charge-fill text-warning"></i> Acesso Rápido:</span>
+        <button class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-4" onclick="abrirModalCompra()"><i class="bi bi-box-seam"></i> Nova Compra</button>
+        <button class="btn btn-outline-success btn-sm rounded-pill fw-bold px-4" onclick="abrirModalVenda()"><i class="bi bi-tools"></i> Nova OS/Venda</button>
+        <button class="btn btn-outline-info btn-sm rounded-pill fw-bold px-4" onclick="abrirModalCliente()"><i class="bi bi-person-plus"></i> Novo Cliente</button>
+        <button class="btn btn-outline-dark btn-sm rounded-pill fw-bold px-4" onclick="abrirModalFinanceiro()"><i class="bi bi-cash-coin"></i> Caixa Avulso</button>
+
+        <div class="ms-auto d-flex align-items-center">
+          <select id="filtro-global-dash" class="form-select d-inline-block w-auto me-2 fw-bold text-primary shadow-sm" onchange="carregarDashboard()">
+            <option value="Todas">🌍 Geral (Casa + Empresa)</option>
+            <option value="Empresa">🏢 Apenas Empresa</option>
+            <option value="Casa">🏠 Apenas Casa</option>
+          </select>
+          <button class="btn btn-outline-dark shadow-sm" onclick="carregarDashboard()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-lg-8 mb-4">
+          <div class="row h-100 align-items-start">
+            <div class="col-md-4 mb-3">
+              <div class="card-os border-start border-danger border-4 h-100 m-0">
+                <h6 class="text-muted text-uppercase fw-bold">Despesas Totais</h6>
+                <h3 class="text-danger fw-bold text-truncate" id="dash-custos">R$ 0,00</h3>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="card-os border-start border-success border-4 h-100 m-0">
+                <h6 class="text-muted text-uppercase fw-bold">Receitas Totais</h6>
+                <h3 class="text-success fw-bold text-truncate" id="dash-receitas">R$ 0,00</h3>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3">
+              <div class="card-os border-start border-primary border-4 h-100 m-0">
+                <h6 class="text-muted text-uppercase fw-bold">Lucro Operacional</h6>
+                <h3 class="text-primary fw-bold text-truncate mb-2" id="dash-lucro">R$ 0,00</h3>
+                <span class="badge bg-primary py-1 px-2">Margem: <span id="dash-margem">0</span>%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+          <div class="card bg-white border-0 shadow-sm rounded-3 overflow-hidden d-flex flex-column">
+            <div class="bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
+              <h6 class="m-0 fw-bold text-secondary"><i class="bi bi-wallet2"></i> Saldo Total</h6>
+              <h4 class="m-0 fw-bold text-dark" id="dash-total-contas">R$ 0,00</h4>
+            </div>
+            <div id="dash-saldos-contas">
+              <div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm"></div> Carregando contas...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modulo-clientes" class="section-view">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-secondary fw-bold m-0">Carteira de Clientes</h3>
+        <button class="btn btn-info text-white btn-lg shadow-sm fw-bold" onclick="abrirModalCliente()"><i class="bi bi-person-plus"></i> Cadastrar Cliente</button>
+      </div>
+      <div class="card card-body bg-light mb-3 border-0 shadow-sm p-3">
+        <div class="row align-items-end">
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Filtrar por Canal</label>
+            <select id="filtro-cli-canal" class="form-select form-select-sm dropdown-canais filtro-tabela" data-table="Clientes"><option value="">Todos</option></select>
+          </div>
+          <div class="col-md-2"><button class="btn btn-sm btn-outline-secondary w-100" onclick="limparFiltros('Clientes')">Limpar Filtros</button></div>
+        </div>
+      </div>
+      <div class="table-container table-responsive"><table id="tabelaClientes" class="table table-hover align-middle w-100"></table></div>
+    </div>
+
+    <div id="modulo-compras" class="section-view">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-secondary fw-bold m-0">Estoque de Compras</h3>
+        <button class="btn btn-primary btn-lg shadow-sm" onclick="abrirModalCompra()"><i class="bi bi-box-seam"></i> Nova Entrada</button>
+      </div>
+      <div class="card card-body bg-light mb-3 border-0 shadow-sm p-3">
+        <div class="row gx-2 align-items-end">
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Data (Início e Fim)</label>
+            <div class="input-group input-group-sm"><input type="date" id="filtro-comp-data-ini" class="form-control filtro-tabela"><input type="date" id="filtro-comp-data-fim" class="form-control filtro-tabela"></div>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Qtd. (Min-Max)</label>
+            <div class="input-group input-group-sm"><input type="number" id="filtro-comp-qtd-min" class="form-control filtro-tabela" placeholder="Min"><input type="number" id="filtro-comp-qtd-max" class="form-control filtro-tabela" placeholder="Max"></div>
+          </div>
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Val. Produto (Min-Max)</label>
+            <div class="input-group input-group-sm"><input type="number" id="filtro-comp-val-min" class="form-control filtro-tabela" placeholder="R$ Min"><input type="number" id="filtro-comp-val-max" class="form-control filtro-tabela" placeholder="R$ Max"></div>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Status</label>
+            <select id="filtro-comp-status" class="form-select form-select-sm filtro-tabela"><option value="">Todos</option><option value="Em Estoque">Em Estoque</option><option value="Esgotado">Esgotado</option></select>
+          </div>
+          <div class="col-md-2"><button class="btn btn-sm btn-outline-secondary w-100" onclick="limparFiltros('Compras')">Limpar</button></div>
+        </div>
+      </div>
+      <div class="table-container table-responsive"><table id="tabelaCompras" class="table table-hover align-middle w-100"></table></div>
+    </div>
+
+    <div id="modulo-vendas" class="section-view">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-secondary fw-bold m-0">Ordens de Serviço e Vendas</h3>
+        <button class="btn btn-success btn-lg shadow-sm" onclick="abrirModalVenda()"><i class="bi bi-tools"></i> Registrar OS/Venda</button>
+      </div>
+      <div class="card card-body bg-light mb-3 border-0 shadow-sm p-3">
+        <div class="row gx-2 align-items-end mb-2">
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Data</label>
+            <div class="input-group input-group-sm"><input type="date" id="filtro-vend-data-ini" class="form-control filtro-tabela"><input type="date" id="filtro-vend-data-fim" class="form-control filtro-tabela"></div>
+          </div>
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Valor Bruto (Min-Max)</label>
+            <div class="input-group input-group-sm"><input type="number" id="filtro-vend-val-min" class="form-control filtro-tabela" placeholder="R$ Min"><input type="number" id="filtro-vend-val-max" class="form-control filtro-tabela" placeholder="R$ Max"></div>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Tipo</label>
+            <select id="filtro-vend-tipo" class="form-select form-select-sm filtro-tabela"><option value="">Todos</option><option value="Venda">Venda</option><option value="Serviço">Serviço</option></select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Canal</label>
+            <select id="filtro-vend-canal" class="form-select form-select-sm dropdown-canais filtro-tabela"><option value="">Todos</option></select>
+          </div>
+          <div class="col-md-2"><button class="btn btn-sm btn-outline-secondary w-100" onclick="limparFiltros('Vendas')">Limpar</button></div>
+        </div>
+      </div>
+      <div class="table-container table-responsive"><table id="tabelaVendas" class="table table-hover align-middle w-100"></table></div>
+    </div>
+
+    <div id="modulo-catalogo" class="section-view">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-secondary fw-bold m-0">Vitrine e Catálogo</h3>
+        <button class="btn btn-warning btn-lg shadow-sm fw-bold" onclick="abrirModalCatalogo()"><i class="bi bi-shop"></i> Novo Produto</button>
+      </div>
+      
+      <div class="card card-body bg-light mb-3 border-0 shadow-sm p-3">
+        <div class="row gx-2 align-items-end mb-2">
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Data</label>
+            <div class="input-group input-group-sm">
+              <input type="date" id="filtro-cat-data-ini" class="form-control filtro-tabela">
+              <input type="date" id="filtro-cat-data-fim" class="form-control filtro-tabela">
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Valor (Min-Max)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="filtro-cat-val-min" class="form-control filtro-tabela" placeholder="R$ Min">
+              <input type="number" id="filtro-cat-val-max" class="form-control filtro-tabela" placeholder="R$ Max">
+            </div>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Tipo</label>
+            <select id="filtro-cat-tipo" class="form-select form-select-sm filtro-tabela">
+              <option value="">Todos</option>
+              <option value="Notebook">Notebook</option>
+              <option value="Peça">Peça</option>
+              <option value="Acessório">Acessório</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Status</label>
+            <select id="filtro-cat-status" class="form-select form-select-sm filtro-tabela">
+              <option value="">Todos</option>
+              <option value="Ativo">Ativo</option>
+              <option value="Pausado">Pausado</option>
+              <option value="Vendido">Vendido</option>
+            </select>
+          </div>
+          <div class="col-md-2"><button class="btn btn-sm btn-outline-secondary w-100 fw-bold" onclick="limparFiltros('Catalogo')">Limpar</button></div>
+        </div>
+      </div>
+
+      <div class="alert alert-info py-2 mb-3 border-0 shadow-sm" style="font-size: 0.85rem;">
+        <i class="bi bi-info-circle-fill me-2"></i> Clique em qualquer linha do catálogo para ver o detalhamento de custos e margem de lucro.
+      </div>
+
+      <div class="table-container table-responsive">
+        <table id="tabelaCatalogo" class="table table-hover align-middle w-100" style="cursor: pointer;"></table>
+      </div>
+    </div>
+
+    <div id="modulo-financeiro" class="section-view">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-secondary fw-bold m-0"><i class="bi bi-graph-up-arrow"></i> Extrato de Lançamentos</h3>
+        <button class="btn btn-dark btn-lg shadow-sm" onclick="abrirModalFinanceiro()"><i class="bi bi-plus-circle"></i> Novo Lançamento</button>
+      </div>
+      <div class="card card-body bg-light mb-3 border-0 shadow-sm p-3">
+        <div class="row gx-2 align-items-end mb-2">
+          <div class="col-md-3">
+            <label class="small fw-bold text-muted">Data</label>
+            <div class="input-group input-group-sm"><input type="date" id="filtro-fin-data-ini" class="form-control filtro-tabela"><input type="date" id="filtro-fin-data-fim" class="form-control filtro-tabela"></div>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Global</label>
+            <select id="filtro-fin-global" class="form-select form-select-sm filtro-tabela"><option value="">Todas</option><option value="Empresa">Empresa</option><option value="Casa">Casa</option></select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Tipo</label>
+            <select id="filtro-fin-tipo" class="form-select form-select-sm filtro-tabela"><option value="">Todos</option><option value="Receita">Receita</option><option value="Despesa">Despesa</option><option value="Transferência">Transferência</option></select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Conta</label>
+            <select id="filtro-fin-conta" class="form-select form-select-sm dropdown-contas filtro-tabela"><option value="">Todas</option></select>
+          </div>
+          <div class="col-md-2">
+            <label class="small fw-bold text-muted">Valor (Min-Max)</label>
+            <div class="input-group input-group-sm"><input type="number" id="filtro-fin-val-min" class="form-control filtro-tabela" placeholder="Min"><input type="number" id="filtro-fin-val-max" class="form-control filtro-tabela" placeholder="Max"></div>
+          </div>
+          <div class="col-md-1"><button class="btn btn-sm btn-outline-secondary w-100" onclick="limparFiltros('Financeiro')">Limpar</button></div>
+        </div>
+      </div>
+      
+      <div class="row mb-4">
+        <div class="col-md-4 mb-2"><div class="fin-card" style="background: linear-gradient(135deg, #ef4444, #dc2626);"><small class="text-white-50 text-uppercase fw-bold mb-1"><i class="bi bi-arrow-down-circle"></i> Saídas</small><h2 class="fw-bold mb-0" id="fin-total-saidas">R$ 0,00</h2></div></div>
+        <div class="col-md-4 mb-2"><div class="fin-card" style="background: linear-gradient(135deg, #10b981, #059669);"><small class="text-white-50 text-uppercase fw-bold mb-1"><i class="bi bi-arrow-up-circle"></i> Entradas</small><h2 class="fw-bold mb-0" id="fin-total-entradas">R$ 0,00</h2></div></div>
+        <div class="col-md-4 mb-2"><div class="fin-card" style="background: linear-gradient(135deg, #1f2937, #111827);"><small class="text-white-50 text-uppercase fw-bold mb-1"><i class="bi bi-bank"></i> Balanço</small><h2 class="fw-bold mb-0" id="fin-balanco">R$ 0,00</h2></div></div>
+      </div>
+      <div class="table-container table-responsive"><table id="tabelaFinanceiro" class="table table-hover align-middle w-100"></table></div>
+    </div>
+
+    <div id="modulo-config" class="section-view">
+      <div class="card bg-white border-0 shadow-sm rounded-3 p-4">
+        <div class="d-flex align-items-start flex-column flex-md-row">
+          <div class="nav flex-column nav-pills me-md-4 mb-3 mb-md-0 w-100 w-md-25" id="v-pills-tab" role="tablist">
+            <button class="nav-link active fw-bold text-start" data-bs-toggle="pill" data-bs-target="#tab-contas" type="button">💳 Contas Bancárias</button>
+            <button class="nav-link fw-bold text-start" data-bs-toggle="pill" data-bs-target="#tab-canais" type="button">🛒 Canais de Aquisição</button>
+            <button class="nav-link fw-bold text-start" data-bs-toggle="pill" data-bs-target="#tab-despesas" type="button">📉 Categorias Despesa</button>
+            <button class="nav-link fw-bold text-start" data-bs-toggle="pill" data-bs-target="#tab-receitas" type="button">📈 Categorias Receita</button>
+            <button class="nav-link fw-bold text-start" data-bs-toggle="pill" data-bs-target="#tab-plats" type="button">📢 Plataformas</button>
+          </div>
+          <div class="tab-content flex-grow-1 w-100" id="v-pills-tabContent" style="min-height: 350px; border-left: 1px solid #eee; padding-left: 20px;">
+            <div class="tab-pane fade show active" id="tab-contas">
+              <h5 class="fw-bold mb-3">Gerenciar Contas Bancárias</h5>
+              <div class="input-group mb-4 shadow-sm">
+                <input type="color" class="form-control form-control-color" id="nova-conta-cor" value="#3b82f6" title="Cor da Conta">
+                <input type="text" class="form-control w-50" id="nova-conta" placeholder="Nome da nova conta...">
+                <button class="btn btn-primary fw-bold px-4" onclick="addConta()">Adicionar</button>
+              </div>
+              <div id="lista-contas" class="scroll-contas" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="tab-pane fade" id="tab-canais">
+              <h5 class="fw-bold mb-3">Canais de Venda e Aquisição</h5>
+              <div class="input-group mb-4 shadow-sm"><input type="text" class="form-control" id="novo-canal" placeholder="Ex: OLX, Indicação..."><button class="btn btn-primary fw-bold" onclick="addGenerico('Configuracoes', 1, 'novo-canal')">Adicionar</button></div>
+              <div id="lista-canais" class="scroll-contas" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="tab-pane fade" id="tab-despesas">
+              <h5 class="fw-bold mb-3">Categorias de Despesa</h5>
+              <div class="input-group mb-4 shadow-sm"><input type="text" class="form-control" id="nova-cat-desp" placeholder="Ex: Frete, Insumos..."><button class="btn btn-primary fw-bold" onclick="addGenerico('Configuracoes', 3, 'nova-cat-desp')">Adicionar</button></div>
+              <div id="lista-catDespesas" class="scroll-contas" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="tab-pane fade" id="tab-receitas">
+              <h5 class="fw-bold mb-3">Categorias de Receita</h5>
+              <div class="input-group mb-4 shadow-sm"><input type="text" class="form-control" id="nova-cat-rec" placeholder="Ex: Serviços, Venda..."><button class="btn btn-primary fw-bold" onclick="addGenerico('Configuracoes', 4, 'nova-cat-rec')">Adicionar</button></div>
+              <div id="lista-catReceitas" class="scroll-contas" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="tab-pane fade" id="tab-plats">
+              <h5 class="fw-bold mb-3">Plataformas de Anúncio</h5>
+              <div class="input-group mb-4 shadow-sm"><input type="text" class="form-control" id="nova-plat" placeholder="Ex: Instagram, Shopee..."><button class="btn btn-primary fw-bold" onclick="addGenerico('Configuracoes', 2, 'nova-plat')">Adicionar</button></div>
+              <div id="lista-plataformas" class="scroll-contas" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalCliente" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-info text-white border-0">
+        <h5 class="modal-title fw-bold" id="title-cliente">Ficha do Cliente</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formCliente" onsubmit="enviarCliente(event)">
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Nome do Cliente</label>
+            <input type="text" class="form-control" id="cli-nome" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Telefone / WhatsApp</label>
+            <input type="text" class="form-control" id="cli-tel">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Veio por qual Canal?</label>
+            <select class="form-select dropdown-canais" id="cli-canal"></select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-bold">Observações / Endereço</label>
+            <textarea class="form-control" id="cli-obs" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="submit" class="btn btn-info text-white px-4 fw-bold" id="btn-cliente">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalCompra" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-primary text-white border-0">
+        <h5 class="modal-title fw-bold" id="title-compra">Registrar Entrada</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formCompra" onsubmit="enviarCompra(event)">
+        <div class="modal-body p-4">
+          <div class="row bg-light p-3 rounded mb-4 align-items-center">
+            <div class="col-md-3 mb-2">
+              <label class="form-label fw-bold">Data da Compra</label>
+              <input type="date" class="form-control" id="c-data" required>
+            </div>
+            <div class="col-md-3 mb-2" id="caixa-c-conta">
+              <label class="form-label fw-bold text-primary">Conta Pgto.</label>
+              <select class="form-select dropdown-contas" id="c-conta" required></select>
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="form-label fw-bold">Frete Total</label>
+              <input type="number" step="0.01" class="form-control" id="c-frete" value="0">
+            </div>
+            <div class="col-md-3 mb-2 text-end">
+              <label class="form-label fw-bold text-muted">Total a Pagar</label>
+              <h3 id="c-total-display" class="text-primary fw-bold m-0">R$ 0,00</h3>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+            <h5 class="fw-bold m-0 text-secondary">Itens da Nota</h5>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addLinhaItemCompra()" id="btn-add-item"><i class="bi bi-plus-lg"></i> Item</button>
+          </div>
+          <div id="lista-itens-compra"></div>
+          <div class="mb-2 mt-4"><label class="form-label fw-bold">Obs</label><textarea class="form-control" id="c-obs" rows="2"></textarea></div>
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="submit" class="btn btn-primary px-4 fw-bold" id="btn-compra">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalVenda" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-success text-white border-0">
+        <h5 class="modal-title fw-bold" id="title-venda">OS / Venda</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formVenda" onsubmit="enviarVenda(event)">
+        <div class="modal-body p-4">
+          
+          <div class="row mb-4 bg-success-subtle p-3 rounded border border-success" id="linha-modo-venda">
+            <div class="col-md-4">
+              <label class="form-label fw-bold text-success">Como deseja registrar?</label>
+              <select class="form-select border-success fw-bold" id="v-modo" onchange="alternarModoVenda()">
+                <option value="Manual">✍️ Entrada Manual (Padrão)</option>
+                <option value="Catalogo">🛍️ Vender item do Catálogo</option>
+              </select>
+            </div>
+            <div class="col-md-8" id="caixa-selecao-catalogo" style="display:none;">
+              <label class="form-label fw-bold text-success">Selecione o Produto Disponível</label>
+              <select class="form-select border-success" id="v-idCatalogo" onchange="preencherDadosCatalogo()">
+                <option value="">Carregando catálogo...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Tipo</label>
+              <select class="form-select" id="v-tipo">
+                <option value="Venda">🛒 Venda de Produto</option>
+                <option value="Serviço">🛠️ Prestação de Serviço</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Data</label>
+              <input type="date" class="form-control" id="v-data" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold text-info">Vincular Cliente</label>
+              <select class="form-select dropdown-clientes" id="v-cliente" required></select>
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="form-label fw-bold">Serviço Realizado / Aparelho Vendido</label>
+            <input type="text" class="form-control form-control-lg" id="v-peca" placeholder="Ex: Conserto de Placa Mãe Notebook Dell..." required>
+          </div>
+          
+          <div class="p-3 bg-light rounded border mb-4" id="caixa-carrinho-venda">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-bold text-secondary m-0"><i class="bi bi-box-seam"></i> Peças de Estoque Utilizadas nesta OS</label>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addLinhaItemVenda()"><i class="bi bi-plus-lg"></i> Adicionar Peça do Estoque</button>
+            </div>
+            <div id="lista-itens-venda"></div>
+            <div id="aviso-edicao-venda" style="display:none;" class="text-danger small fw-bold mt-2"><i class="bi bi-exclamation-triangle"></i> Ao editar, a movimentação de estoque não é refeita para evitar duplicidade.</div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Valor Cobrado Cliente (R$)</label>
+              <input type="number" step="0.01" class="form-control" id="v-valorProd" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold text-success">Frete Cobrado Cliente (R$)</label>
+              <input type="number" step="0.01" class="form-control" id="v-valorFrete" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold text-danger">Custo Transportadora (R$)</label>
+              <input type="number" step="0.01" class="form-control" id="v-custoFrete" value="0">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Canal</label>
+              <select class="form-select dropdown-canais" id="v-canal" required></select>
+            </div>
+            <div class="col-md-6 mb-3" id="caixa-v-conta">
+              <label class="form-label fw-bold text-primary">Recebido em:</label>
+              <select class="form-select dropdown-contas" id="v-conta" required></select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-bold">Obs Internas</label>
+            <input type="text" class="form-control" id="v-obs">
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="submit" class="btn btn-success px-4 fw-bold" id="btn-venda">Salvar OS / Venda</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalCatalogo" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-warning text-dark border-0">
+        <h5 class="modal-title fw-bold" id="title-cat">Registrar no Catálogo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formCatalogo" onsubmit="enviarCatalogo(event)">
+        <div class="modal-body p-4">
+          
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Data Inclusão</label>
+              <input type="date" class="form-control" id="cat-data" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Tipo</label>
+              <select class="form-select" id="cat-tipo" required>
+                <option value="Notebook">💻 Notebook</option>
+                <option value="Peça">⚙️ Peça</option>
+                <option value="Acessório">🖱️ Acessório</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Status</label>
+              <select class="form-select" id="cat-status" required>
+                <option value="Ativo">Ativo</option>
+                <option value="Pausado">Pausado</option>
+                <option value="Vendido">Vendido</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold text-primary">Nome do Produto para Venda</label>
+            <input type="text" class="form-control form-control-lg" id="cat-nome" placeholder="Ex: Notebook Dell Inspiron i5 8GB SSD 256GB" required>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-12">
+              <label class="form-label fw-bold text-success">Preço Sugerido de Venda (R$)</label>
+              <input type="number" step="0.01" class="form-control form-control-lg fw-bold text-success" id="cat-valor" placeholder="0,00" required>
+            </div>
+          </div>
+
+          <div class="p-3 bg-light rounded border mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <label class="form-label fw-bold text-secondary m-0"><i class="bi bi-link-45deg"></i> Composição (Vincular Peças de Estoque)</label>
+              <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="addLinhaItemCatalogo()">
+                <i class="bi bi-plus-lg"></i> Vincular Peça
+              </button>
+            </div>
+            <div id="lista-itens-catalogo"></div>
+            <small class="text-muted"><i class="bi bi-info-circle"></i> Selecione as peças para que o sistema calcule o lucro real.</small>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-bold text-secondary">Canais e Links de Anúncio</label>
+            <div id="container-canais-catalogo" class="p-2 border rounded bg-white shadow-sm" style="max-height: 280px; overflow-y: auto;"></div>
+            <small class="text-muted">Marque o canal para abrir o campo do link específico.</small>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-bold">Observações Internas / Notas</label>
+            <textarea class="form-control" id="cat-obs-interna" rows="2" placeholder="Notas sobre o estado do produto, garantia, etc..."></textarea>
+          </div>
+
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="submit" class="btn btn-warning px-5 fw-bold text-dark" id="btn-cat">Salvar no Catálogo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalFinanceiro" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-dark text-white border-0"><h5 class="modal-title fw-bold" id="title-fin">Lançamento Avulso</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <form id="formFinanceiro" onsubmit="enviarFinanceiroAvulso(event)">
+        <div class="modal-body p-4">
+          <div class="row">
+            <div class="col-md-3 mb-3"><label class="form-label fw-bold">Data</label><input type="date" class="form-control" id="f-data" required></div>
+            <div class="col-md-3 mb-3"><label class="form-label fw-bold text-primary">Global</label><select class="form-select" id="f-cat-global" required><option value="Empresa">🏢 Empresa</option><option value="Casa">🏠 Casa</option></select></div>
+            <div class="col-md-3 mb-3"><label class="form-label fw-bold">Tipo</label><select class="form-select" id="f-tipo" onchange="trocarCategoriaFin(this.value)" required><option value="Despesa">Despesa</option><option value="Receita">Receita</option><option value="Transferência">Transferência</option></select></div>
+            <div class="col-md-3 mb-3 d-flex align-items-end pb-1">
+              <div class="form-check form-switch fs-5">
+                <input class="form-check-input border-secondary" type="checkbox" id="f-status">
+                <label class="form-check-label fs-6 fw-bold mt-1 text-success" for="f-status">Situação: Pago</label>
+              </div>
+            </div>
+            <div class="col-md-4 mb-3" id="caixa-recorrencia"><label class="form-label fw-bold">Recorrência</label><select class="form-select" id="f-recorrencia"><option value="1">Lançamento Único</option><option value="2">2 Meses</option><option value="3">3 Meses</option><option value="6">6 Meses</option><option value="12">1 Ano</option></select></div>
+          </div>
+          <div class="mb-3" id="caixa-categoria"><label class="form-label fw-bold">Categoria</label><select class="form-select dropdown-catDespesas" id="f-cat" required></select></div>
+          <div class="mb-3"><label class="form-label fw-bold">Descrição</label><input type="text" class="form-control" id="f-desc" required></div>
+          <div class="row">
+            <div class="col-md-4 mb-3"><label class="form-label fw-bold">Valor (R$)</label><input type="number" step="0.01" class="form-control" id="f-valor" required></div>
+            <div class="col-md-4 mb-3"><label class="form-label fw-bold" id="label-conta-origem">Conta</label><select class="form-select dropdown-contas" id="f-conta" required></select></div>
+            <div class="col-md-4 mb-3" id="caixa-conta-destino" style="display:none;"><label class="form-label fw-bold text-info">Conta Destino</label><select class="form-select dropdown-contas" id="f-conta-destino"></select></div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0"><button type="submit" class="btn btn-dark px-4 fw-bold" id="btn-fin">Lançar</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<?!= include('script'); ?>
+
+</body>
+</html>
