@@ -1,0 +1,305 @@
+<style>
+  /* ==========================================
+     IDENTIDADE VISUAL E VARIÁVEIS BASE
+     ========================================== */
+  :root { 
+    --bg-dark: #111827; 
+    --bg-light: #f3f4f6; 
+    --accent: #3b82f6; 
+    --brand: #10b981; 
+    --danger: #ef4444; 
+    --warning: #f59e0b;
+  }
+  
+  body { 
+    background-color: var(--bg-light); 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    overflow-x: hidden; 
+  }
+
+  /* ==========================================
+     NAVBAR SUPERIOR (TOP MENU)
+     ========================================== */
+  .top-navbar { 
+    background-color: var(--bg-dark); 
+    color: white; 
+    padding: 0 20px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    height: 65px; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+    position: sticky; 
+    top: 0; 
+    z-index: 1000; 
+  }
+  
+  .brand { 
+    font-size: 1.4rem; 
+    font-weight: 800; 
+    color: var(--brand); 
+    letter-spacing: 1px; 
+    display: flex; 
+    align-items: center; 
+    gap: 10px;
+  }
+  
+  .nav-menu { 
+    display: flex; 
+    gap: 5px; 
+    height: 100%; 
+    overflow-x: auto; 
+    white-space: nowrap;
+  }
+
+  .nav-menu::-webkit-scrollbar { display: none; }
+  .nav-menu { -ms-overflow-style: none; scrollbar-width: none; }
+  
+  .nav-item { 
+    padding: 0 15px; 
+    cursor: pointer; 
+    transition: 0.2s; 
+    color: #9ca3af; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    font-size: 0.95rem; 
+    font-weight: 500; 
+    height: 100%; 
+    border-bottom: 3px solid transparent;
+  }
+  
+  .nav-item:hover { 
+    background-color: rgba(255,255,255,0.05); 
+    color: white; 
+  }
+  
+  .nav-item.active { 
+    color: white; 
+    border-bottom: 3px solid var(--accent); 
+    background-color: rgba(255,255,255,0.05);
+  }
+  
+  /* ==========================================
+     LAYOUT PRINCIPAL E CARDS
+     ========================================== */
+  .main-content { 
+    padding: 30px; 
+    min-height: calc(100vh - 65px); 
+  }
+  
+  .section-view { 
+    display: none; 
+    animation: fadeIn 0.3s ease-in-out; 
+  }
+  
+  .section-view.active { 
+    display: block; 
+  }
+  
+  .card-os { 
+    border: none; 
+    border-radius: 12px; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+    background: white; 
+    padding: 25px; 
+    margin-bottom: 20px; 
+  }
+
+  /* ==========================================
+     DESIGN DO DASHBOARD E ATALHOS
+     ========================================== */
+  .quick-action-bar { 
+    border-left: 5px solid var(--accent); 
+  }
+  
+  .account-item { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 12px 15px; 
+    border-bottom: 1px solid #f3f4f6; 
+    transition: 0.2s; 
+  }
+  
+  .account-item:hover { 
+    background-color: #f9fafb; 
+  }
+  
+  .account-item:last-child { 
+    border-bottom: none; 
+  }
+  
+  .scroll-contas::-webkit-scrollbar { width: 6px; }
+  .scroll-contas::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 8px; }
+  .scroll-contas::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 8px; }
+
+  /* ==========================================
+     ESTILO DOS CARRINHOS (COMPRAS / VENDAS / CATÁLOGO)
+     ========================================== */
+  .item-compra, .item-venda, .item-vinculo-catalogo {
+    animation: fadeIn 0.3s ease;
+  }
+
+  #caixa-carrinho-venda {
+    border: 1px solid #dee2e6;
+  }
+
+  /* Estilo para Canais do Catálogo (Checkboxes Dinâmicos) */
+  .cursor-pointer { cursor: pointer; }
+  .form-check-inline {
+    transition: 0.2s;
+    cursor: pointer;
+  }
+  .form-check-inline:hover {
+    background-color: #e5e7eb !important;
+  }
+
+  /* ==========================================
+     CONFIGURAÇÕES (LISTAS E CORES)
+     ========================================== */
+  .color-dot { 
+    width: 14px; 
+    height: 14px; 
+    border-radius: 50%; 
+    display: inline-block; 
+    margin-right: 8px; 
+    border: 1px solid rgba(0,0,0,0.1); 
+    vertical-align: middle;
+  }
+  
+  .config-item { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 10px 0; 
+    border-bottom: 1px solid #f3f4f6; 
+  }
+  
+  .config-item:last-child { border-bottom: none; }
+
+  /* ==========================================
+     TABELAS GERAIS (ALTA DENSIDADE / COMPACTAS)
+     ========================================== */
+  .table-container { 
+    background: white; 
+    border-radius: 12px; 
+    padding: 15px; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+  }
+  
+  .table {
+    font-size: 0.82rem; 
+    margin-bottom: 0 !important;
+  }
+
+  .table th { 
+    background-color: #f9fafb !important; 
+    color: #374151; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    font-size: 0.72rem; 
+    padding: 8px 10px !important; 
+    white-space: nowrap; 
+  }
+  
+  .table td {
+    vertical-align: middle;
+    padding: 6px 10px !important; 
+  }
+
+  .table .btn-sm {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+
+  /* Filtros e Paginação do DataTables */
+  .dataTables_wrapper .dataTables_filter input {
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    height: auto;
+  }
+  
+  .dataTables_wrapper .dataTables_length select {
+    font-size: 0.85rem;
+    padding: 2px 25px 2px 8px;
+    height: auto;
+  }
+  
+  .dataTables_wrapper .dataTables_info, 
+  .dataTables_wrapper .dataTables_paginate {
+    font-size: 0.8rem;
+    margin-top: 10px;
+  }
+
+  /* ==========================================
+     CRACHÁS E ESTILIZAÇÕES ESPECÍFICAS (FIN/CATÁLOGO)
+     ========================================== */
+  .fin-badge { 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    font-weight: 700; 
+    font-size: 0.68rem; 
+    letter-spacing: 0.5px; 
+    text-transform: uppercase; 
+  }
+  
+  .fin-receita { background-color: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
+  .fin-despesa { background-color: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+  
+  .val-positivo { color: #059669; font-weight: 800; font-size: 0.85rem; }
+  .val-negativo { color: #dc2626; font-weight: 800; font-size: 0.85rem; }
+  
+  .fin-card { 
+    border-radius: 12px; 
+    padding: 20px; 
+    color: white; 
+    border: none; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center;
+  }
+
+  /* Crachás do Catálogo */
+  .badge-cat-ativo { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+  .badge-cat-vendido { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .badge-cat-pausado { background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+
+  /* Estilos para o Modal de Lucro (Ver Detalhes) */
+  .bg-success-subtle { background-color: #f0fdf4 !important; }
+  .bg-danger-subtle { background-color: #fef2f2 !important; }
+
+  /* ==========================================
+     UTILITÁRIOS E ANIMAÇÕES
+     ========================================== */
+  .form-control:focus, .form-select:focus { 
+    box-shadow: none; 
+    border-color: var(--accent); 
+  }
+  
+  @keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(10px); } 
+    to { opacity: 1; transform: translateY(0); } 
+  }
+
+  /* ==========================================
+     AJUSTES PARA CELULAR (MOBILE)
+     ========================================== */
+  @media (max-width: 768px) {
+    .main-content { padding: 15px; }
+    .top-navbar { padding: 0 10px; }
+    .brand { font-size: 1.1rem; }
+    .nav-item { padding: 0 10px; font-size: 0.85rem; }
+    
+    .item-compra .col-md-6, .item-compra .col-md-2, .item-compra .col-md-3, .item-compra .col-md-1,
+    .item-venda .col-md-8, .item-venda .col-md-3, .item-venda .col-md-1 {
+        margin-bottom: 10px;
+    }
+    
+    .card-body .col-md-2, .card-body .col-md-3 {
+        margin-bottom: 10px;
+    }
+  }
+</style>
